@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp BOT</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-gray-100 flex justify-center items-center h-screen">
+    <div class="flex flex-col items-center">
+      <div class="flex flex-row bg-green-50 gap-4 rounded-3xl" id="qrScan">
+        <!-- QR a la izquierda -->
+        <div class="card rounded-3xl">
+          <img src="/qr" id="qr" alt="QR" class="h-64 object-cover" />
+          <!-- Tarjeta de estado de conexión -->
+        </div>
+        <!-- Texto de explicación -->
+        <div class="max-w-md p-2">
+          <p class="text-lg mb-2 font-bold">
+            Por favor, escanea este código QR con WhatsApp en tu teléfono.
+          </p>
+          <p class="text-sm text-gray-600">
+            Este código QR funciona igual que el de WhatsApp Web. Solo necesitas
+            abrir WhatsApp en tu teléfono y sincronizarlo con este código QR.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-row" id="botConectado">
+        <div class="card bg-white shadow-md p-4 mt-8 rounded-3xl w-full">
+          <h2 class="text-lg font-semibold mb-2">
+            Bot conectado y vinculado ✅
+          </h2>
+          <small>
+            Envía un mensaje a tu número de teléfono desde el bot para probarlo.
+          </small>
+          <div class="flex items-center gap-4 mt-4">
+            <input
+              type="text"
+              id="phone"
+              class="p-2 border border-gray-300 rounded-lg"
+              placeholder="Escribe un teléfono"
+            />
+            <div
+              class="bg-black p-2 rounded-lg text-xs text-white cursor-pointer hover:bg-red-500"
+              onclick="testBot(document.getElementById('phone').value) "
+            >
+              Enviar mensaje de prueba
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-row gap-4">
+        <div class="card bg-white shadow-md p-4 mt-8 rounded-3xl">
+          <h2 class="text-lg font-semibold mb-2">Estado del sistema</h2>
+          <div class="flex items-center">
+            <div
+              class="w-4 h-4 bg-yellow-500 rounded-full mr-2 animate-pulse"
+              id="connectedIndicator"
+            ></div>
+            <p class="text-sm" id="connectedText">Consultando estado</p>
+          </div>
+          <div class="flex items-center">
+            <div
+              class="w-4 h-4 bg-yellow-500 rounded-full mr-2"
+              id="flujosIndicator"
+            ></div>
+            <p class="text-sm" id="flujosText">Consultando flujos</p>
+          </div>
+        </div>
+
+        <div class="card bg-white shadow-md p-4 mt-8 rounded-3xl">
+          <h2 class="text-lg font-semibold mb-2">Acciones</h2>
+          <div class="flex items-center gap-4 flex flex-row">
+            <div
+              class="bg-black p-2 rounded-lg text-xs text-white cursor-pointer hover:bg-red-500"
+              onclick="confirm('¿Estás seguro de que deseas reiniciar el dispositivo?') && fetch('/restart', { method: 'GET' }).then(() => alert('Bot reiniciado, espera unos segundos'))"
+            >
+              Reiniciar
+            </div>
+            <div
+              class="bg-black p-2 rounded-lg text-xs text-white cursor-pointer hover:bg-red-500"
+              onclick="confirm('¿Estás seguro de que deseas desvincular el dispositivo?') && fetch('/disconnect', { method: 'GET' }).then(() => alert('Bot desvinculado, espera unos segundos y vuelve a escanear el código QR'))"
+            >
+              Desvincular
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+  <script>
+    const qrScan = document.getElementById("qrScan");
+    const connectedIndicator = document.getElementById("connectedIndicator");
+    const connectedText = document.getElementById("connectedText");
+    const botConectado = document.getElementById("botConectado");
+    const flujosIndicator = document.getElementById("flujosIndicator");
+    let lastTestTime = 0;
+
+    //prevent multiple clicks on testBot
+    function testBot(phone) {
+      if (Date.now() - lastTestTime < 15000) {
+        alert("Espera 15 segundos antes de enviar otro mensaje de prueba");
+        return;
+      }
+      lastTestTime = Date.now();
+      fetch("/testBot?phone=" + phone, { method: "GET" }).then(() => {
+        alert("Mensaje enviado, consulta tu WhatsApp");
+      });
+    }
+
+    //hide QRscan until status is loaded
+    qrScan.style.display = "none";
+    botConectado.style.display = "none";
+
+    //refresca el qr cada 10 segundos
+    setInterval(() => {
+      document.getElementById("qr").src = "/qr?" + new Date().getTime();
+
+      fetch("/status")
+        .then((res) => res.json())
+        .then((data) => {
+          const { deviceConnected, flujosLoaded, flujos } = data;
+
+          if (deviceConnected) {
+            connectedIndicator.classList.remove("bg-red-500");
+            connectedIndicator.classList.add("bg-green-500");
+            connectedText.innerText = "Vinculado al dispositivo";
+
+            qrScan.style.display = "none";
+            botConectado.style.display = "flex";
+          } else {
+            connectedIndicator.classList.remove("bg-green-500");
+            connectedIndicator.classList.add("bg-red-500");
+            connectedText.innerText = "Desconectado";
+            qrScan.style.display = "flex";
+            botConectado.style.display = "none";
+          }
+
+          if (flujosLoaded) {
+            flujosIndicator.classList.remove("bg-red-500");
+            flujosIndicator.classList.add("bg-green-500");
+            document.getElementById(
+              "flujosText"
+            ).innerText = `Flujos cargados: ${flujos.length}`;
+          } else {
+            flujosIndicator.classList.remove("bg-green-500");
+            flujosIndicator.classList.add("bg-red-500");
+            document.getElementById("flujosText").innerText = "Cargando flujos";
+          }
+
+          console.log(data);
+        });
+    }, 1000);
+  </script>
+</html>
